@@ -6,12 +6,10 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"regexp"
 	"sync"
 	"time"
 
 	"github.com/apex/log"
-	"github.com/fatih/color"
 
 	"github.com/buildpack/lifecycle/logging"
 	"github.com/buildpack/lifecycle/style"
@@ -161,7 +159,7 @@ func write(w *Writer, b []byte) {
 		return
 	}
 	w.buffer.Write(b[:i+1])
-	_, _ = fmt.Fprint(w.out, maybeStripColor(w.buffer.Bytes()))
+	_, _ = fmt.Fprint(w.out, w.buffer.Bytes())
 	w.buffer.Reset()
 	write(w, b[i+1:])
 }
@@ -182,19 +180,10 @@ func (w *Writer) Close() error {
 	if w.buffer.Len() == 0 {
 		return nil
 	}
-	contents := maybeStripColor(w.buffer.Bytes())
+	contents := w.buffer.Bytes()
 	if len(contents) > 0 {
 		_, err := fmt.Fprintln(w.out, contents)
 		return err
 	}
 	return nil
-}
-
-var colorCodeMatcher = regexp.MustCompile(`\x1b\[[0-9;]*m`)
-
-func maybeStripColor(b []byte) string {
-	if color.NoColor {
-		return string(colorCodeMatcher.ReplaceAll(b, []byte("")))
-	}
-	return string(b)
 }

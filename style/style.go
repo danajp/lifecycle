@@ -3,11 +3,11 @@ package style
 import (
 	"fmt"
 
-	"github.com/fatih/color"
+	"github.com/heroku/color"
 )
 
 var Symbol = func(format string, a ...interface{}) string {
-	if color.NoColor {
+	if !color.Enabled() {
 		format = fmt.Sprintf("'%s'", format)
 	}
 	return Key(format, a...)
