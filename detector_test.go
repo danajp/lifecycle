@@ -2,7 +2,6 @@ package lifecycle_test
 
 import (
 	"bytes"
-	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -15,7 +14,6 @@ import (
 	"github.com/sclevine/spec/report"
 
 	"github.com/buildpack/lifecycle"
-	"github.com/buildpack/lifecycle/internal/mocks"
 )
 
 func TestDetector(t *testing.T) {
@@ -49,7 +47,7 @@ func testDetector(t *testing.T, when spec.G, it spec.S) {
 			AppDir:        appDir,
 			PlatformDir:   platformDir,
 			BuildpacksDir: buildpacksDir,
-			Logger:        mocks.NewMockLogger(io.MultiWriter(outLog, it.Out())),
+			//Logger:        mocks.NewMockLogger(io.MultiWriter(outLog, it.Out())),
 		}
 	})
 

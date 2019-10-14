@@ -3,15 +3,17 @@ package cmd
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
+	"github.com/buildpack/lifecycle/style"
+
+	"github.com/apex/log"
 	"github.com/docker/docker/client"
 	"github.com/pkg/errors"
-
-	internallog "github.com/buildpack/lifecycle/internal/logging"
-	"github.com/buildpack/lifecycle/logging"
 )
 
 const (
@@ -26,7 +28,7 @@ const (
 	DefaultPlanPath      = "./plan.toml"
 	DefaultProcessType   = "web"
 	DefaultLauncherPath  = "/cnb/lifecycle/launcher"
-	DefaultLogLevel      = logging.InfoLevel
+	DefaultLogLevel      = "info"
 
 	EnvLayersDir         = "CNB_LAYERS_DIR"
 	EnvAppDir            = "CNB_APP_DIR"
@@ -156,15 +158,45 @@ var (
 	// SCMRepository is the source repository. It is injected at compile time.
 	SCMRepository = ""
 
-	Logger = newLogger()
+	Logger = &log.Logger{
+		Handler: &handler{
+			writer: os.Stdout,
+		},
+	}
 )
 
-func newLogger() logging.Logger {
-	stdout := internallog.New(os.Stdout)
-	defer stdout.Close()
-	stderr := internallog.New(os.Stderr)
-	defer stderr.Close()
-	return internallog.NewLogWithWriters(stdout, stderr)
+func SetLogLevel(level string) {
+	var err error
+	Logger.Level, err = log.ParseLevel(level)
+	if err != nil {
+		FailErrCode(err, CodeInvalidArgs, "parse log level")
+	}
+}
+
+const (
+	errorLevelText = "ERROR: "
+	warnLevelText  = "Warning: "
+)
+
+type handler struct {
+	mu     sync.Mutex
+	writer io.Writer
+}
+
+func (h *handler) HandleLog(entry *log.Entry) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	var err error
+	switch entry.Level {
+	case log.WarnLevel:
+		_, err = h.writer.Write([]byte(style.Warn(warnLevelText) + entry.Message))
+	case log.ErrorLevel:
+		_, err = h.writer.Write([]byte(style.Warn(errorLevelText) + entry.Message))
+	default:
+		_, err = h.writer.Write([]byte(entry.Message))
+	}
+	return err
 }
 
 // buildVersion is a display format of the version and build metadata in compliance with semver.

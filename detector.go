@@ -12,8 +12,6 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/pkg/errors"
-
-	"github.com/buildpack/lifecycle/logging"
 )
 
 const (
@@ -76,7 +74,7 @@ type DetectConfig struct {
 	AppDir        string
 	PlatformDir   string
 	BuildpacksDir string
-	Logger        logging.Logger
+	Logger        Logger
 	runs          *sync.Map
 }
 

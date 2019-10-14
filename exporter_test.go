@@ -21,7 +21,6 @@ import (
 	"github.com/sclevine/spec/report"
 
 	"github.com/buildpack/lifecycle"
-	"github.com/buildpack/lifecycle/internal/mocks"
 	"github.com/buildpack/lifecycle/metadata"
 	h "github.com/buildpack/lifecycle/testhelpers"
 )
@@ -88,9 +87,9 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 				{ID: "buildpack.id", Version: "1.2.3"},
 				{ID: "other.buildpack.id", Version: "4.5.6", Optional: false},
 			},
-			Logger: mocks.NewMockLogger(io.MultiWriter(&outLog, it.Out())),
-			UID:    uid,
-			GID:    gid,
+			//Logger: mocks.NewMockLogger(io.MultiWriter(&outLog, it.Out())),
+			UID: uid,
+			GID: gid,
 		}
 	})
 

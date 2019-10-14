@@ -53,11 +53,11 @@ func main() {
 
 	flag.Parse()
 
-	cmd.Logger.WantLevel(logLevel)
-
 	if printVersion {
 		cmd.ExitWithVersion()
 	}
+
+	cmd.SetLogLevel(logLevel)
 
 	if flag.NArg() > 1 {
 		cmd.Exit(cmd.FailErrCode(fmt.Errorf("received %d args expected 1", flag.NArg()), cmd.CodeInvalidArgs, "parse arguments"))

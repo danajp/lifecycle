@@ -42,11 +42,11 @@ func main() {
 
 	flag.Parse()
 
-	cmd.Logger.WantLevel(logLevel)
-
 	if printVersion {
 		cmd.ExitWithVersion()
 	}
+
+	cmd.SetLogLevel(logLevel)
 
 	if flag.NArg() > 0 {
 		cmd.Exit(cmd.FailErrCode(errors.New("received unexpected args"), cmd.CodeInvalidArgs, "parse arguments"))

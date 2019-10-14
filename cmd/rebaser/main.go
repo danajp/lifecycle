@@ -42,11 +42,11 @@ func main() {
 
 	flag.Parse()
 
-	cmd.Logger.WantLevel(logLevel)
-
 	if printVersion {
 		cmd.ExitWithVersion()
 	}
+
+	cmd.SetLogLevel(logLevel)
 
 	imageNames = flag.Args()
 

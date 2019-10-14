@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"io/ioutil"
-	"log"
 	"os"
 
 	"github.com/buildpack/imgutil/remote"
@@ -39,15 +38,15 @@ func init() {
 
 func main() {
 	// suppress output from libraries, lifecycle will not use standard logger
-	log.SetOutput(ioutil.Discard)
+	//log.SetOutput(ioutil.Discard)
 
 	flag.Parse()
-
-	cmd.Logger.WantLevel(logLevel)
 
 	if printVersion {
 		cmd.ExitWithVersion()
 	}
+
+	cmd.SetLogLevel(logLevel)
 
 	if flag.NArg() > 0 {
 		cmd.Exit(cmd.FailErrCode(errors.New("received unexpected args"), cmd.CodeInvalidArgs, "parse arguments"))

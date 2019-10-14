@@ -14,7 +14,6 @@ import (
 	"github.com/buildpack/lifecycle"
 	"github.com/buildpack/lifecycle/archive"
 	"github.com/buildpack/lifecycle/cache"
-	"github.com/buildpack/lifecycle/internal/mocks"
 	h "github.com/buildpack/lifecycle/testhelpers"
 )
 
@@ -34,8 +33,6 @@ func testRestorer(t *testing.T, when spec.G, it spec.S) {
 		it.Before(func() {
 			var err error
 
-			emptyLogger := mocks.NewMockLogger(ioutil.Discard)
-
 			layersDir, err = ioutil.TempDir("", "lifecycle-layer-dir")
 			h.AssertNil(t, err)
 
@@ -51,9 +48,9 @@ func testRestorer(t *testing.T, when spec.G, it spec.S) {
 					{ID: "buildpack.id"},
 					{ID: "escaped/buildpack/id"},
 				},
-				Logger: emptyLogger,
-				UID:    1234,
-				GID:    4321,
+				//Logger: emptyLogger,
+				UID: 1234,
+				GID: 4321,
 			}
 		})
 
