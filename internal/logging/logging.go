@@ -1,4 +1,3 @@
-// Package logging implements the logger for the pack CLI.
 package logging
 
 import (
@@ -7,10 +6,12 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"regexp"
 	"sync"
 	"time"
 
 	"github.com/apex/log"
+	"github.com/fatih/color"
 
 	"github.com/buildpack/lifecycle/logging"
 	"github.com/buildpack/lifecycle/style"
@@ -53,7 +54,6 @@ func appendMissingLineFeed(msg string) string {
 	return string(buff)
 }
 
-// HandleLog supports behavior that is unique to Pack CLI, namely toggling colors and timestamps.
 func (h *handler) HandleLog(e *log.Entry) error {
 	h.Lock()
 	defer h.Unlock()
@@ -118,7 +118,6 @@ func (lw *logWithWriters) WantLevel(level string) {
 	}
 }
 
-// NewLogWithWriters creates a logger to be used with pack CLI.
 func NewLogWithWriters(stdout, stderr io.Writer) *logWithWriters {
 	hnd := &handler{
 		writer: os.Stdout,
@@ -189,4 +188,13 @@ func (w *Writer) Close() error {
 		return err
 	}
 	return nil
+}
+
+var colorCodeMatcher = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+func maybeStripColor(b []byte) string {
+	if color.NoColor {
+		return string(colorCodeMatcher.ReplaceAll(b, []byte("")))
+	}
+	return string(b)
 }

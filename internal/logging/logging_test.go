@@ -17,25 +17,8 @@ import (
 
 const testTime = "2019/05/15 01:01:01.000000"
 
-func newTestLogger(stdout, stderr io.Writer) *logWithWriters {
-	hnd := &handler{
-		writer: stdout,
-		timer: func() time.Time {
-			tm, _ := time.Parse(timeFmt, testTime)
-			return tm
-		},
-	}
-	var lw logWithWriters
-	lw.handler = hnd
-	lw.out = hnd.writer
-	lw.errOut = stderr
-	lw.Logger.Handler = hnd
-	lw.Logger.Level = log.DebugLevel
-	return &lw
-}
-
-func TestPackCLILogger(t *testing.T) {
-	spec.Run(t, "PackCLILogger", func(t *testing.T, when spec.G, it spec.S) {
+func TestLogger(t *testing.T) {
+	spec.Run(t, "Logger", func(t *testing.T, when spec.G, it spec.S) {
 		var log, errLog bytes.Buffer
 		var logger *logWithWriters
 
@@ -284,4 +267,21 @@ func TestMaybeStripColors(t *testing.T) {
 		})
 
 	})
+}
+
+func newTestLogger(stdout, stderr io.Writer) *logWithWriters {
+	hnd := &handler{
+		writer: stdout,
+		timer: func() time.Time {
+			tm, _ := time.Parse(timeFmt, testTime)
+			return tm
+		},
+	}
+	var lw logWithWriters
+	lw.handler = hnd
+	lw.out = hnd.writer
+	lw.errOut = stderr
+	lw.Logger.Handler = hnd
+	lw.Logger.Level = log.DebugLevel
+	return &lw
 }
