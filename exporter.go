@@ -3,7 +3,9 @@ package lifecycle
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/BurntSushi/toml"
 	"github.com/buildpack/imgutil"
@@ -48,6 +50,55 @@ func (e *Exporter) Export(
 
 	meta.RunImage.Reference = runImageRef
 	meta.Stack = stack
+
+	// Read metadata from layers config
+	var buildMetadata BuildMetadata
+	metadataTomlPath := filepath.Join(layersDir, "config", "metadata.toml")
+	_, err = toml.DecodeFile(metadataTomlPath, &buildMetadata)
+	if err != nil && !os.IsNotExist(err){
+		return errors.Wrap(err, "failed to read metadata.toml")
+	}
+
+	//TODO:
+	//  - use sha for unique id
+	//  - remove slice files from appDir
+	//  -
+
+
+	sliceId := 1
+	for _, slice := range buildMetadata.Slices {
+		var allGlobMatches []string
+
+		for _, path := range slice.Paths {
+			e.Logger.Infof("original glob path '%s'\n", path)
+
+			// convert relative paths into absolute paths
+			path = filepath.Clean(path)
+			if len(path) > len(appDir) && path[:len(appDir)] != appDir {
+				path = filepath.Join(appDir, path)
+			}
+
+			e.Logger.Infof("absolute glob path is %s\n", path)
+			globMatches, err := filepath.Glob(path)
+			if err != nil {
+				return errors.Wrap(err, "bad pattern for glob path")
+			}
+			allGlobMatches = append(allGlobMatches, globMatches...)
+		}
+
+		if len(allGlobMatches) > 0 {
+			sliceSHA, err := e.addSliceLayer(
+				workingImage,
+				"slice-"+strconv.Itoa(sliceId),
+				"",
+				allGlobMatches)
+			if err != nil {
+				return errors.Wrap(err, "exporting slice layer")
+			}
+			e.Logger.Infof("Slice sha = %s", sliceSHA)
+		}
+		sliceId++
+	}
 
 	meta.App.SHA, err = e.addLayer(workingImage, &layer{path: appDir, identifier: "app"}, origMetadata.App.SHA)
 	if err != nil {
@@ -191,3 +242,32 @@ func (e *Exporter) addBuildMetadataLabel(image imgutil.Image, plan []BOMEntry, l
 
 	return nil
 }
+
+func (e *Exporter) addSliceLayer(image imgutil.Image, layerID string, previousSHA string, files []string) (string, error) {
+	tarPath := filepath.Join(e.ArtifactsDir, escapeID(layerID)+".tar")
+
+	// TODO: delete app dirs files in slices
+
+	sha, err := archive.WriteFilesToTar(tarPath, e.UID, e.GID, files...)
+	if err != nil {
+		return "", errors.Wrap(err, "archiving glob files")
+	}
+	e.Logger.Infof("sha for tarPath is %s", sha)
+	e.Logger.Infof("artifacts directory is %s", e.ArtifactsDir)
+
+	// FIXME: Delete this when done.  Only used for debug purposes
+	tarPathD := filepath.Join("/workspace", escapeID(layerID)+".tar")
+	_, _ = archive.WriteFilesToTar(tarPathD, e.UID, e.GID, files...)
+
+	if sha == previousSHA {
+		e.Logger.Infof("Reusing layer '%s'\n", layerID)
+		e.Logger.Debugf("Layer '%s' SHA: %s\n", layerID, sha)
+		return sha, image.ReuseLayer(previousSHA)
+	}
+	e.Logger.Infof("Adding layer '%s'\n", layerID)
+	e.Logger.Debugf("Layer '%s' SHA: %s\n", layerID, sha)
+
+	return sha, image.AddLayer(tarPath)
+	//return sha, nil
+}
+

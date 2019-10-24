@@ -169,6 +169,11 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 				fakeOriginalImage.Cleanup()
 			})
 
+			it("creates slice layers on Run image", func() {
+				h.AssertNil(t, exporter.Export(layersDir, appDir, fakeAppImage, runImageRef, fakeImageMetadata, additionalNames, launcherConfig, stack))
+
+			})
+
 			it("creates app layer on Run image", func() {
 				h.AssertNil(t, exporter.Export(layersDir, appDir, fakeAppImage, runImageRef, fakeImageMetadata, additionalNames, launcherConfig, stack))
 

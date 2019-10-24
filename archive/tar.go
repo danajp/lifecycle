@@ -11,6 +11,87 @@ import (
 	"time"
 )
 
+
+func WriteFilesToTar(dest string, uid, gid int, files ...string) (string, error) {
+	hasher := sha256.New()
+	f, err := os.Create(dest)
+	if err != nil {
+		return "", err
+	}
+	w := io.MultiWriter(hasher, f)
+	tw := tar.NewWriter(w)
+
+	fileMap := make(map[string]struct{})
+	for _, file := range files {
+		if AddFileToArchive(tw, file, uid, gid, fileMap) != nil {
+			return "", err
+		}
+	}
+
+	_ = tw.Close()
+	_ = f.Close()
+
+	sha := hex.EncodeToString(hasher.Sum(make([]byte, 0, hasher.Size())))
+	return "sha256:" + sha, nil
+}
+
+func AddFileToArchive(tw *tar.Writer, srcDir string, uid, gid int, fileMap map[string]struct{}) error {
+	err := addParentDirsUnique(srcDir, tw, uid, gid, fileMap)
+	if err != nil {
+		return err
+	}
+
+	return filepath.Walk(srcDir, func(file string, fi os.FileInfo, err error) error {
+		fmt.Println(fmt.Sprintf("======================== parentDir %v", fileMap))
+
+		if _, ok := fileMap[file]; ok {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if fi.Mode()&os.ModeSocket != 0 {
+			return nil
+		}
+		var header *tar.Header
+		var target string
+		if fi.Mode()&os.ModeSymlink != 0 {
+			target, err = os.Readlink(file)
+			if err != nil {
+				return err
+			}
+		}
+		header, err = tar.FileInfoHeader(fi, target)
+		if err != nil {
+			return err
+		}
+		header.Name = file
+		header.ModTime = time.Date(1980, time.January, 1, 0, 0, 1, 0, time.UTC)
+		header.Uid = uid
+		header.Gid = gid
+		header.Uname = ""
+		header.Gname = ""
+
+		if err := tw.WriteHeader(header); err != nil {
+			return err
+		}
+		if fi.Mode().IsRegular() {
+			f, err := os.Open(file)
+			if err != nil {
+				return err
+			}
+			defer f.Close()
+			if _, err := io.Copy(tw, f); err != nil {
+				return err
+			}
+		}
+
+		fmt.Println("======================== adding file to fileMap" + file)
+		fileMap[file] = struct{}{}
+		return nil
+	})
+}
+
 func WriteTarFile(sourceDir, dest string, uid, gid int) (string, error) {
 	hasher := sha256.New()
 	f, err := os.Create(dest)
@@ -79,6 +160,39 @@ func WriteTarArchive(w io.Writer, srcDir string, uid, gid int) error {
 	})
 }
 
+func addParentDirsUnique(tarDir string, tw *tar.Writer, uid, gid int, parentDirs map[string]struct{}) error {
+	parent := filepath.Dir(tarDir)
+	if parent == "." || parent == "/" {
+		return nil
+	}
+
+	if _, ok := parentDirs[parent]; ok {
+		return nil
+	}
+
+	if err := addParentDirsUnique(parent, tw, uid, gid, parentDirs); err != nil {
+		return err
+	}
+
+	info, err := os.Stat(parent)
+	if err != nil {
+		return err
+	}
+
+	header, err := tar.FileInfoHeader(info, parent)
+	if err != nil {
+		return err
+	}
+	header.Name = parent
+	header.ModTime = time.Date(1980, time.January, 1, 0, 0, 1, 0, time.UTC)
+
+	parentDirs[parent] = struct{}{}
+	fmt.Println("======================== adding parent " + parent)
+
+
+	return tw.WriteHeader(header)
+}
+
 func addParentDirs(tarDir string, tw *tar.Writer, uid, gid int) error {
 	parent := filepath.Dir(tarDir)
 	if parent == "." || parent == "/" {
@@ -100,6 +214,8 @@ func addParentDirs(tarDir string, tw *tar.Writer, uid, gid int) error {
 	}
 	header.Name = parent
 	header.ModTime = time.Date(1980, time.January, 1, 0, 0, 1, 0, time.UTC)
+
+
 
 	return tw.WriteHeader(header)
 }
