@@ -12,19 +12,19 @@ import (
 )
 
 
-func WriteFilesToTar(dest string, uid, gid int, files ...string) (string, error) {
+func WriteFilesToTar(dest string, uid, gid int, files ...string) (string, map[string]struct{}, error) {
 	hasher := sha256.New()
 	f, err := os.Create(dest)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	w := io.MultiWriter(hasher, f)
 	tw := tar.NewWriter(w)
 
-	fileMap := make(map[string]struct{})
+	fileSet := make(map[string]struct{})
 	for _, file := range files {
-		if AddFileToArchive(tw, file, uid, gid, fileMap) != nil {
-			return "", err
+		if AddFileToArchive(tw, file, uid, gid, fileSet) != nil {
+			return "", nil, err
 		}
 	}
 
@@ -32,19 +32,17 @@ func WriteFilesToTar(dest string, uid, gid int, files ...string) (string, error)
 	_ = f.Close()
 
 	sha := hex.EncodeToString(hasher.Sum(make([]byte, 0, hasher.Size())))
-	return "sha256:" + sha, nil
+	return "sha256:" + sha, fileSet, nil
 }
 
-func AddFileToArchive(tw *tar.Writer, srcDir string, uid, gid int, fileMap map[string]struct{}) error {
-	err := addParentDirsUnique(srcDir, tw, uid, gid, fileMap)
+func AddFileToArchive(tw *tar.Writer, srcDir string, uid, gid int, fileSet map[string]struct{}) error {
+	err := addParentDirsUnique(srcDir, tw, uid, gid, fileSet)
 	if err != nil {
 		return err
 	}
 
 	return filepath.Walk(srcDir, func(file string, fi os.FileInfo, err error) error {
-		fmt.Println(fmt.Sprintf("======================== parentDir %v", fileMap))
-
-		if _, ok := fileMap[file]; ok {
+		if _, ok := fileSet[file]; ok {
 			return nil
 		}
 		if err != nil {
@@ -86,8 +84,8 @@ func AddFileToArchive(tw *tar.Writer, srcDir string, uid, gid int, fileMap map[s
 			}
 		}
 
-		fmt.Println("======================== adding file to fileMap" + file)
-		fileMap[file] = struct{}{}
+		fmt.Println("======================== adding file to fileSet" + file)
+		fileSet[file] = struct{}{}
 		return nil
 	})
 }

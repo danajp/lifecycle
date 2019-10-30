@@ -246,18 +246,31 @@ func (e *Exporter) addBuildMetadataLabel(image imgutil.Image, plan []BOMEntry, l
 func (e *Exporter) addSliceLayer(image imgutil.Image, layerID string, previousSHA string, files []string) (string, error) {
 	tarPath := filepath.Join(e.ArtifactsDir, escapeID(layerID)+".tar")
 
-	// TODO: delete app dirs files in slices
-
-	sha, err := archive.WriteFilesToTar(tarPath, e.UID, e.GID, files...)
+	// TODO: Can I just use files to delete from app dir?
+	//       NOTE: there can/will be duplicate entries in the files list
+	sha, fileSet, err := archive.WriteFilesToTar(tarPath, e.UID, e.GID, files...)
 	if err != nil {
 		return "", errors.Wrap(err, "archiving glob files")
 	}
-	e.Logger.Infof("sha for tarPath is %s", sha)
-	e.Logger.Infof("artifacts directory is %s", e.ArtifactsDir)
 
 	// FIXME: Delete this when done.  Only used for debug purposes
 	tarPathD := filepath.Join("/workspace", escapeID(layerID)+".tar")
-	_, _ = archive.WriteFilesToTar(tarPathD, e.UID, e.GID, files...)
+	_, _, _ = archive.WriteFilesToTar(tarPathD, e.UID, e.GID, files...)
+
+	// TODO: try and delete empty directories from the appDir that are in the slices
+	for file, _ := range fileSet {
+		stat, _ := os.Stat(file)
+		if !stat.IsDir() {
+			err = os.Remove(file)
+			e.Logger.Infof("deleting from app dir: %s", file)
+			if err != nil {
+				e.Logger.Errorf("failed to delete %v", err)
+			}
+		}
+	}
+
+	e.Logger.Infof("sha for tarPath is %s", sha)
+	e.Logger.Infof("artifacts directory is %s", e.ArtifactsDir)
 
 	if sha == previousSHA {
 		e.Logger.Infof("Reusing layer '%s'\n", layerID)
@@ -268,6 +281,5 @@ func (e *Exporter) addSliceLayer(image imgutil.Image, layerID string, previousSH
 	e.Logger.Debugf("Layer '%s' SHA: %s\n", layerID, sha)
 
 	return sha, image.AddLayer(tarPath)
-	//return sha, nil
 }
 
