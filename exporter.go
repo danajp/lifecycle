@@ -1,11 +1,12 @@
 package lifecycle
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/buildpack/imgutil"
@@ -59,13 +60,6 @@ func (e *Exporter) Export(
 		return errors.Wrap(err, "failed to read metadata.toml")
 	}
 
-	//TODO:
-	//  - use sha for unique id
-	//  - remove slice files from appDir
-	//  -
-
-
-	sliceId := 1
 	for _, slice := range buildMetadata.Slices {
 		var allGlobMatches []string
 
@@ -73,10 +67,9 @@ func (e *Exporter) Export(
 			e.Logger.Infof("original glob path '%s'\n", path)
 
 			// convert relative paths into absolute paths
-			path = filepath.Clean(path)
-			if len(path) > len(appDir) && path[:len(appDir)] != appDir {
-				path = filepath.Join(appDir, path)
-			}
+			// TODO: Can I just do: if !filepath.IsAbs(path) { path = filepath.Join(appDir, path) }
+			//       Still need to make sure someone doesn't use an absolute path outside of the appDir
+			path = e.normalizedPath(appDir, path)
 
 			e.Logger.Infof("absolute glob path is %s\n", path)
 			globMatches, err := filepath.Glob(path)
@@ -87,17 +80,13 @@ func (e *Exporter) Export(
 		}
 
 		if len(allGlobMatches) > 0 {
-			sliceSHA, err := e.addSliceLayer(
-				workingImage,
-				"slice-"+strconv.Itoa(sliceId),
-				"",
-				allGlobMatches)
+			layerID := fmt.Sprintf("slice-%x", sha256.Sum256([]byte(strings.Join(slice.Paths, ""))))
+			sliceSHA, err := e.addSliceLayer(workingImage, layerID, "", allGlobMatches)
 			if err != nil {
 				return errors.Wrap(err, "exporting slice layer")
 			}
 			e.Logger.Infof("Slice sha = %s", sliceSHA)
 		}
-		sliceId++
 	}
 
 	meta.App.SHA, err = e.addLayer(workingImage, &layer{path: appDir, identifier: "app"}, origMetadata.App.SHA)
@@ -246,11 +235,11 @@ func (e *Exporter) addBuildMetadataLabel(image imgutil.Image, plan []BOMEntry, l
 func (e *Exporter) addSliceLayer(image imgutil.Image, layerID string, previousSHA string, files []string) (string, error) {
 	tarPath := filepath.Join(e.ArtifactsDir, escapeID(layerID)+".tar")
 
-	// TODO: Can I just use files to delete from app dir?
+	// TODO: Can I just use the "files" to delete from app dir?
 	//       NOTE: there can/will be duplicate entries in the files list
 	sha, fileSet, err := archive.WriteFilesToTar(tarPath, e.UID, e.GID, files...)
 	if err != nil {
-		return "", errors.Wrap(err, "archiving glob files")
+		return "", errors.Wrapf(err, "exporting slice layer '%s'", layerID)
 	}
 
 	// FIXME: Delete this when done.  Only used for debug purposes
@@ -269,9 +258,6 @@ func (e *Exporter) addSliceLayer(image imgutil.Image, layerID string, previousSH
 		}
 	}
 
-	e.Logger.Infof("sha for tarPath is %s", sha)
-	e.Logger.Infof("artifacts directory is %s", e.ArtifactsDir)
-
 	if sha == previousSHA {
 		e.Logger.Infof("Reusing layer '%s'\n", layerID)
 		e.Logger.Debugf("Layer '%s' SHA: %s\n", layerID, sha)
@@ -283,3 +269,18 @@ func (e *Exporter) addSliceLayer(image imgutil.Image, layerID string, previousSH
 	return sha, image.AddLayer(tarPath)
 }
 
+func (e *Exporter) normalizedPath(baseDir, path string) string {
+	path = filepath.Clean(path)
+
+	// force relative path to be absolute from the base dir
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(baseDir, path)
+	}
+	// force an absolute path to be absolute from base dir
+	if len(path) > len(baseDir) && path[:len(baseDir)] != baseDir {
+		path = filepath.Join(baseDir, path)
+		e.Logger.Warnf("found absolute path %s outside of %s", path, baseDir)
+	}
+
+	return path
+}
