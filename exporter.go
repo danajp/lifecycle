@@ -43,6 +43,7 @@ func (e *Exporter) Export(
 	var err error
 
 	meta := metadata.LayersMetadata{}
+	meta.App = make(map[string]string)
 
 	meta.RunImage.TopLayer, err = workingImage.TopLayer()
 	if err != nil {
@@ -52,7 +53,6 @@ func (e *Exporter) Export(
 	meta.RunImage.Reference = runImageRef
 	meta.Stack = stack
 
-	// Read metadata from layers config
 	var buildMetadata BuildMetadata
 	metadataTomlPath := filepath.Join(layersDir, "config", "metadata.toml")
 	_, err = toml.DecodeFile(metadataTomlPath, &buildMetadata)
@@ -64,14 +64,8 @@ func (e *Exporter) Export(
 		var allGlobMatches []string
 
 		for _, path := range slice.Paths {
-			e.Logger.Infof("original glob path '%s'\n", path)
-
-			// convert relative paths into absolute paths
-			// TODO: Can I just do: if !filepath.IsAbs(path) { path = filepath.Join(appDir, path) }
-			//       Still need to make sure someone doesn't use an absolute path outside of the appDir
-			path = e.normalizedPath(appDir, path)
-
-			e.Logger.Infof("absolute glob path is %s\n", path)
+			// make all paths absolute to the app dir
+			path = e.toAbs(appDir, path)
 			globMatches, err := filepath.Glob(path)
 			if err != nil {
 				return errors.Wrap(err, "bad pattern for glob path")
@@ -80,19 +74,21 @@ func (e *Exporter) Export(
 		}
 
 		if len(allGlobMatches) > 0 {
-			layerID := fmt.Sprintf("slice-%x", sha256.Sum256([]byte(strings.Join(slice.Paths, ""))))
-			sliceSHA, err := e.addSliceLayer(workingImage, layerID, "", allGlobMatches)
+			sliceLayerID := fmt.Sprintf("slice-%x", sha256.Sum256([]byte(strings.Join(slice.Paths, ""))))
+			sliceSHA, err := e.addSliceLayer(workingImage, sliceLayerID, origMetadata.App[sliceLayerID], allGlobMatches)
 			if err != nil {
 				return errors.Wrap(err, "exporting slice layer")
 			}
 			e.Logger.Infof("Slice sha = %s", sliceSHA)
+			meta.App[sliceLayerID] = sliceSHA
 		}
 	}
 
-	meta.App.SHA, err = e.addLayer(workingImage, &layer{path: appDir, identifier: "app"}, origMetadata.App.SHA)
+	appSHA, err := e.addLayer(workingImage, &layer{path: appDir, identifier: "app"}, origMetadata.App["app"])
 	if err != nil {
 		return errors.Wrap(err, "exporting app layer")
 	}
+	meta.App["app"] = appSHA
 
 	meta.Config.SHA, err = e.addLayer(workingImage, &layer{path: filepath.Join(layersDir, "config"), identifier: "config"}, origMetadata.Config.SHA)
 	if err != nil {
@@ -234,24 +230,19 @@ func (e *Exporter) addBuildMetadataLabel(image imgutil.Image, plan []BOMEntry, l
 
 func (e *Exporter) addSliceLayer(image imgutil.Image, layerID string, previousSHA string, files []string) (string, error) {
 	tarPath := filepath.Join(e.ArtifactsDir, escapeID(layerID)+".tar")
-
-	// TODO: Can I just use the "files" to delete from app dir?
-	//       NOTE: there can/will be duplicate entries in the files list
 	sha, fileSet, err := archive.WriteFilesToTar(tarPath, e.UID, e.GID, files...)
 	if err != nil {
 		return "", errors.Wrapf(err, "exporting slice layer '%s'", layerID)
 	}
 
 	// FIXME: Delete this when done.  Only used for debug purposes
-	tarPathD := filepath.Join("/workspace", escapeID(layerID)+".tar")
-	_, _, _ = archive.WriteFilesToTar(tarPathD, e.UID, e.GID, files...)
+	//tarPathD := filepath.Join("/workspace", escapeID(layerID)+".tar")
+	//_, _, _ = archive.WriteFilesToTar(tarPathD, e.UID, e.GID, files...)
 
-	// TODO: try and delete empty directories from the appDir that are in the slices
 	for file, _ := range fileSet {
 		stat, _ := os.Stat(file)
 		if !stat.IsDir() {
 			err = os.Remove(file)
-			e.Logger.Infof("deleting from app dir: %s", file)
 			if err != nil {
 				e.Logger.Errorf("failed to delete %v", err)
 			}
@@ -269,7 +260,7 @@ func (e *Exporter) addSliceLayer(image imgutil.Image, layerID string, previousSH
 	return sha, image.AddLayer(tarPath)
 }
 
-func (e *Exporter) normalizedPath(baseDir, path string) string {
+func (e *Exporter) toAbs(baseDir, path string) string {
 	path = filepath.Clean(path)
 
 	// force relative path to be absolute from the base dir

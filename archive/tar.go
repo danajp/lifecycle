@@ -154,6 +154,7 @@ func WriteTarArchive(w io.Writer, srcDir string, uid, gid int) error {
 				return err
 			}
 		}
+		fmt.Println("======================== OG: adding file to fileSet" + file)
 		return nil
 	})
 }
@@ -187,7 +188,6 @@ func addParentDirsUnique(tarDir string, tw *tar.Writer, uid, gid int, parentDirs
 	parentDirs[parent] = struct{}{}
 	fmt.Println("======================== adding parent " + parent)
 
-
 	return tw.WriteHeader(header)
 }
 
@@ -213,8 +213,7 @@ func addParentDirs(tarDir string, tw *tar.Writer, uid, gid int) error {
 	header.Name = parent
 	header.ModTime = time.Date(1980, time.January, 1, 0, 0, 1, 0, time.UTC)
 
-
-
+	fmt.Println("======================== OG: adding parent " + parent)
 	return tw.WriteHeader(header)
 }
 
