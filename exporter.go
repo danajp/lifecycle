@@ -56,7 +56,7 @@ func (e *Exporter) Export(
 	var buildMetadata BuildMetadata
 	metadataTomlPath := filepath.Join(layersDir, "config", "metadata.toml")
 	_, err = toml.DecodeFile(metadataTomlPath, &buildMetadata)
-	if err != nil && !os.IsNotExist(err){
+	if err != nil && !os.IsNotExist(err) {
 		return errors.Wrap(err, "failed to read metadata.toml")
 	}
 

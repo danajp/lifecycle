@@ -42,7 +42,7 @@ type Slice struct {
 
 type LaunchTOML struct {
 	Processes []Process `toml:"processes"`
-	Slices []Slice	 	`toml:"slices"`
+	Slices    []Slice   `toml:"slices"`
 }
 
 type BOMEntry struct {
@@ -145,7 +145,7 @@ func (b *Builder) Build() (*BuildMetadata, error) {
 		Processes:  procMap.list(),
 		Buildpacks: b.Group.Group,
 		BOM:        bom,
-		Slices:		slices,
+		Slices:     slices,
 	}, nil
 }
 

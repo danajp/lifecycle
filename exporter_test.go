@@ -4,6 +4,8 @@ import (
 	"archive/tar"
 	"encoding/json"
 	"fmt"
+	"github.com/buildpack/imgutil/remote"
+	"github.com/google/go-containerregistry/pkg/name"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -17,8 +19,6 @@ import (
 	"github.com/apex/log/handlers/memory"
 	"github.com/buildpack/imgutil/fakes"
 	"github.com/buildpack/imgutil/local"
-	"github.com/buildpack/imgutil/remote"
-	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/sclevine/spec"
 	"github.com/sclevine/spec/report"
 
@@ -169,11 +169,6 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 				fakeOriginalImage.Cleanup()
 			})
 
-			it("creates slice layers on Run image", func() {
-				h.AssertNil(t, exporter.Export(layersDir, appDir, fakeAppImage, runImageRef, fakeImageMetadata, additionalNames, launcherConfig, stack))
-
-			})
-
 			it("creates app layer on Run image", func() {
 				h.AssertNil(t, exporter.Export(layersDir, appDir, fakeAppImage, runImageRef, fakeImageMetadata, additionalNames, launcherConfig, stack))
 
@@ -293,7 +288,7 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 				h.AssertEq(t, meta.RunImage.Reference, "run-image-reference")
 
 				t.Log("adds layer shas to metadata label")
-				h.AssertEq(t, meta.App.SHA, "sha256:"+appLayerSHA)
+				h.AssertEq(t, meta.App["app"], "sha256:"+appLayerSHA)
 				h.AssertEq(t, meta.Config.SHA, "sha256:"+configLayerSHA)
 				h.AssertEq(t, meta.Buildpacks[0].ID, "buildpack.id")
 				h.AssertEq(t, meta.Buildpacks[0].Version, "1.2.3")
@@ -660,6 +655,23 @@ type = "Apache-2.0"
 				nonExistingOriginalImage.Cleanup()
 			})
 
+			it("create a slice layer on the Run image", func() {
+				h.AssertNil(t, ioutil.WriteFile(filepath.Join(appDir, "static", "resources", "assets", "config.txt"), []byte("app-config"), os.ModePerm))
+				h.AssertNil(t, ioutil.WriteFile(filepath.Join(appDir, "static", "resources", "assets", "image.jpeg"), []byte("app-image"), os.ModePerm))
+
+				h.AssertNil(t, exporter.Export(layersDir, appDir, fakeAppImage, runImageRef, metadata.LayersMetadata{}, additionalNames, launcherConfig, stack))
+
+				sliceLayerPath := fakeAppImage.AppLayerPath()
+
+				assertTarFileExists(t, sliceLayerPath, filepath.Join(appDir, "static", "resources", "assets", "config.txt"), true)
+				assertTarFileExists(t, sliceLayerPath, filepath.Join(appDir, "static", "resources", "assets", "image.jpeg"), true)
+
+				appLayerPath := fakeAppImage.ConfigLayerPath()
+
+				assertTarFileExists(t, appLayerPath, filepath.Join(appDir, "static", "resources", "assets", "config.txt"), false)
+				assertTarFileExists(t, appLayerPath, filepath.Join(appDir, "static", "resources", "assets", "image.jpeg"), false)
+			})
+
 			it("creates app layer on Run image", func() {
 				h.AssertNil(t, exporter.Export(layersDir, appDir, fakeAppImage, runImageRef, metadata.LayersMetadata{}, additionalNames, launcherConfig, stack))
 
@@ -678,7 +690,7 @@ type = "Apache-2.0"
 				assertTarFileContents(t,
 					configLayerPath,
 					filepath.Join(layersDir, "config/metadata.toml"),
-					"[[processes]]\n  type = \"web\"\n  command = \"npm start\"\n",
+					"[[processes]]\n  type = \"web\"\n  command = \"npm start\"\n\n[[slices]]\n\n[[slices]]\n  Paths = [\"static/resources/**/*.jpeg\", \"static/resources/**/*.txt\"]\n",
 				)
 				assertTarFileOwner(t, configLayerPath, filepath.Join(layersDir, "config"), uid, gid)
 				assertAddLayerLog(t, logHandler, "config", configLayerPath)
@@ -760,7 +772,7 @@ type = "Apache-2.0"
 				h.AssertEq(t, meta.RunImage.Reference, "run-image-reference")
 
 				t.Log("adds layer shas to metadata label")
-				h.AssertEq(t, meta.App.SHA, "sha256:"+appLayerSHA)
+				h.AssertEq(t, meta.App["app"], "sha256:"+appLayerSHA)
 				h.AssertEq(t, meta.Config.SHA, "sha256:"+configLayerSHA)
 				h.AssertEq(t, meta.Launcher.SHA, "sha256:"+launcherLayerSHA)
 				h.AssertEq(t, meta.Buildpacks[0].Layers["layer1"].SHA, "sha256:"+buildpackLayer1SHA)
@@ -981,6 +993,15 @@ func assertTarFileContents(t *testing.T, tarfile, path, expected string) {
 		t.Fatalf("%s does not exist in %s", path, tarfile)
 	}
 	h.AssertEq(t, contents, expected)
+}
+
+func assertTarFileExists(t *testing.T, tarfile, path string, expected bool) {
+	t.Helper()
+	exist, _ := tarFileContext(t, tarfile, path)
+	if !exist {
+		h.AssertEq(t, false, expected)
+	}
+	h.AssertEq(t, exist, expected)
 }
 
 func tarFileContext(t *testing.T, tarfile, path string) (exist bool, contents string) {

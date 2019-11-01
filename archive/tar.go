@@ -11,7 +11,6 @@ import (
 	"time"
 )
 
-
 func WriteFilesToTar(dest string, uid, gid int, files ...string) (string, map[string]struct{}, error) {
 	hasher := sha256.New()
 	f, err := os.Create(dest)
@@ -84,7 +83,7 @@ func AddFileToArchive(tw *tar.Writer, srcDir string, uid, gid int, fileSet map[s
 			}
 		}
 
-		fmt.Println("======================== adding file to fileSet" + file)
+		//fmt.Println("======================== adding file to fileSet" + file)
 		fileSet[file] = struct{}{}
 		return nil
 	})
@@ -154,7 +153,7 @@ func WriteTarArchive(w io.Writer, srcDir string, uid, gid int) error {
 				return err
 			}
 		}
-		fmt.Println("======================== OG: adding file to fileSet" + file)
+		//fmt.Println("======================== OG: adding file to fileSet" + file)
 		return nil
 	})
 }
@@ -186,7 +185,7 @@ func addParentDirsUnique(tarDir string, tw *tar.Writer, uid, gid int, parentDirs
 	header.ModTime = time.Date(1980, time.January, 1, 0, 0, 1, 0, time.UTC)
 
 	parentDirs[parent] = struct{}{}
-	fmt.Println("======================== adding parent " + parent)
+	//fmt.Println("======================== adding parent " + parent)
 
 	return tw.WriteHeader(header)
 }
@@ -213,7 +212,7 @@ func addParentDirs(tarDir string, tw *tar.Writer, uid, gid int) error {
 	header.Name = parent
 	header.ModTime = time.Date(1980, time.January, 1, 0, 0, 1, 0, time.UTC)
 
-	fmt.Println("======================== OG: adding parent " + parent)
+	//fmt.Println("======================== OG: adding parent " + parent)
 	return tw.WriteHeader(header)
 }
 

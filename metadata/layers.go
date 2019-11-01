@@ -12,7 +12,7 @@ import (
 const LayerMetadataLabel = "io.buildpacks.lifecycle.metadata"
 
 type LayersMetadata struct {
-	App        map[string]string  		 `json:"app" toml:"app"`
+	App        map[string]string         `json:"app" toml:"app"`
 	Config     LayerMetadata             `json:"config" toml:"config"`
 	Launcher   LayerMetadata             `json:"launcher" toml:"launcher"`
 	Buildpacks []BuildpackLayersMetadata `json:"buildpacks" toml:"buildpacks"`
