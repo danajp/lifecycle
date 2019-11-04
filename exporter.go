@@ -235,10 +235,6 @@ func (e *Exporter) addSliceLayer(image imgutil.Image, layerID string, previousSH
 		return "", errors.Wrapf(err, "exporting slice layer '%s'", layerID)
 	}
 
-	// FIXME: Delete this when done.  Only used for debug purposes
-	//tarPathD := filepath.Join("/workspace", escapeID(layerID)+".tar")
-	//_, _, _ = archive.WriteFilesToTar(tarPathD, e.UID, e.GID, files...)
-
 	for file, _ := range fileSet {
 		stat, _ := os.Stat(file)
 		if !stat.IsDir() {
